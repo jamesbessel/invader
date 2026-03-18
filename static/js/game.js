@@ -105,6 +105,20 @@ function playSound(type) {
             osc.start(now);
             osc.stop(now + 0.05);
             break;
+            
+        case 'powerUp':
+            // Power-up collection sound - ascending chime
+            osc.type = 'sine';
+            osc.frequency.setValueAtTime(400, now);
+            osc.frequency.setValueAtTime(600, now + 0.1);
+            osc.frequency.setValueAtTime(800, now + 0.2);
+            osc.frequency.setValueAtTime(1200, now + 0.3);
+            gain.gain.setValueAtTime(0.15, now);
+            gain.gain.setValueAtTime(0.15, now + 0.3);
+            gain.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+            osc.start(now);
+            osc.stop(now + 0.5);
+            break;
     }
 }
 
@@ -136,7 +150,13 @@ const game = {
     lastShot: 0,
     lastInvaderShot: 0,
     keys: {},
-    animationId: null
+    animationId: null,
+    powerUp: {
+        active: false,
+        endTime: 0,
+        duration: 10000 // 10 seconds
+    },
+    specialAliens: []
 };
 
 // Initialize player
@@ -153,6 +173,9 @@ function initPlayer() {
 // Initialize invaders
 function initInvaders() {
     game.invaders = [];
+    game.specialAliens = [];
+    
+    // Create regular invaders first
     for (let row = 0; row < INVADER_ROWS; row++) {
         for (let col = 0; col < INVADER_COLS; col++) {
             const x = INVADER_OFFSET_LEFT + col * (INVADER_WIDTH + INVADER_PADDING);
@@ -165,10 +188,19 @@ function initInvaders() {
                 row: row,
                 col: col,
                 alive: true,
-                type: row < 1 ? 3 : row < 3 ? 2 : 1 // Points: 30, 20, 10
+                type: row < 1 ? 3 : row < 3 ? 2 : 1, // Points: 30, 20, 10
+                isSpecial: false
             });
         }
     }
+    
+    // Exactly 2 special aliens per level
+    const shuffled = [...game.invaders].sort(() => Math.random() - 0.5);
+    for (let i = 0; i < 2; i++) {
+        shuffled[i].isSpecial = true;
+        game.specialAliens.push(shuffled[i]);
+    }
+    
     game.invaderSpeed = 1 + (game.level - 1) * 0.3;
 }
 
@@ -179,6 +211,8 @@ function resetGame() {
     game.lives = 3;
     game.bullets = [];
     game.invaderBullets = [];
+    game.powerUp.active = false;
+    game.powerUp.endTime = 0;
     initPlayer();
     initInvaders();
     updateHUD();
@@ -189,6 +223,8 @@ function nextLevel() {
     game.level++;
     game.bullets = [];
     game.invaderBullets = [];
+    game.powerUp.active = false;
+    game.powerUp.endTime = 0;
     initInvaders();
     initPlayer();
     updateHUD();
@@ -222,9 +258,25 @@ function drawInvader(invader) {
     const w = invader.width;
     const h = invader.height;
     
+    // Special alien glow effect
+    if (invader.isSpecial) {
+        const pulse = Math.sin(Date.now() / 150) * 0.3 + 0.7;
+        const glowColor = '#9932cc'; // Purple glow
+        
+        // Outer glow
+        ctx.shadowColor = glowColor;
+        ctx.shadowBlur = 15 * pulse;
+    }
+    
     // Colors based on row
-    const colors = ['#ff0000', '#ff6600', '#ffff00', '#00ff00', '#00ffff'];
-    ctx.fillStyle = colors[invader.row] || '#00ff00';
+    let fillColor;
+    if (invader.isSpecial) {
+        fillColor = '#9932cc'; // Purple
+    } else {
+        const colors = ['#ff0000', '#ff6600', '#ffff00', '#00ff00', '#00ffff'];
+        fillColor = colors[invader.row] || '#00ff00';
+    }
+    ctx.fillStyle = fillColor;
     
     // Different designs based on type
     if (invader.type === 3) {
@@ -256,6 +308,19 @@ function drawInvader(invader) {
         ctx.fillRect(x + w * 0.25, y + h * 0.4, w * 0.15, h * 0.15);
         ctx.fillRect(x + w * 0.6, y + h * 0.4, w * 0.15, h * 0.15);
     }
+    
+    // Add star marker for special aliens
+    if (invader.isSpecial) {
+        ctx.shadowBlur = 0;
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '12px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText('★', x + w / 2, y + h / 2 + 4);
+    }
+    
+    // Reset shadow
+    ctx.shadowColor = 'transparent';
+    ctx.shadowBlur = 0;
 }
 
 // Draw bullets
@@ -385,9 +450,26 @@ function checkCollisions() {
                 bullet.y <= inv.y + inv.height) {
                 
                 inv.alive = false;
-                game.score += inv.type * 10;
+                
+                // Check if special alien
+                if (inv.isSpecial) {
+                    // Activate or extend power-up (add 10 seconds)
+                    game.powerUp.active = true;
+                    if (game.powerUp.endTime > Date.now()) {
+                        // Add time to existing timer
+                        game.powerUp.endTime += game.powerUp.duration;
+                    } else {
+                        // Start fresh timer
+                        game.powerUp.endTime = Date.now() + game.powerUp.duration;
+                    }
+                    game.score += 50; // Special aliens worth 50 points
+                    playSound('powerUp');
+                } else {
+                    game.score += inv.type * 10;
+                    playSound('explosion');
+                }
+                
                 updateHUD();
-                playSound('explosion');
                 return false;
             }
         }
@@ -428,6 +510,13 @@ function updateHUD() {
     document.getElementById('lives').textContent = game.lives;
 }
 
+// Update power-up timer
+function updatePowerUp() {
+    if (game.powerUp.active && Date.now() >= game.powerUp.endTime) {
+        game.powerUp.active = false;
+    }
+}
+
 // Show message
 function showMessage(title, subtitle) {
     document.getElementById('message-text').innerHTML = `${title}<br><span style="font-size: 16px">${subtitle.replace(/\n/g, '<br>')}</span>`;
@@ -446,6 +535,7 @@ function gameLoop() {
     drawStars();
     
     // Update
+    updatePowerUp();
     movePlayer();
     moveBullets();
     moveInvaders();
@@ -456,6 +546,7 @@ function gameLoop() {
     drawPlayer();
     game.invaders.forEach(drawInvader);
     drawBullets();
+    drawPowerUpIndicator();
     
     // Check for level complete
     if (game.invaders.every(inv => !inv.alive)) {
@@ -490,6 +581,41 @@ function drawStars() {
     });
 }
 
+// Draw power-up indicator
+function drawPowerUpIndicator() {
+    if (!game.powerUp.active) return;
+    
+    const remaining = Math.max(0, Math.ceil((game.powerUp.endTime - Date.now()) / 1000));
+    const barWidth = 200;
+    const barHeight = 20;
+    const x = canvas.width - barWidth - 10;
+    const y = 10;
+    const progress = (game.powerUp.endTime - Date.now()) / game.powerUp.duration;
+    
+    // Background
+    ctx.fillStyle = '#333';
+    ctx.fillRect(x, y, barWidth, barHeight);
+    
+    // Progress bar
+    const gradient = ctx.createLinearGradient(x, y, x + barWidth * progress, y);
+    gradient.addColorStop(0, '#00ffff');
+    gradient.addColorStop(1, '#00ff88');
+    ctx.fillStyle = gradient;
+    ctx.fillRect(x, y, barWidth * progress, barHeight);
+    
+    // Border
+    ctx.strokeStyle = '#00ffff';
+    ctx.lineWidth = 2;
+    ctx.strokeRect(x, y, barWidth, barHeight);
+    
+    // Text
+    ctx.fillStyle = '#000';
+    ctx.font = 'bold 14px Courier New';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(`⚡ ${remaining}s`, x + barWidth / 2, y + barHeight / 2);
+}
+
 // Start game
 function startGame() {
     game.state = 'playing';
@@ -521,10 +647,22 @@ document.addEventListener('keydown', (e) => {
             // Player shoots
             const now = Date.now();
             if (now - game.lastShot > 300) {
-                game.bullets.push({
-                    x: game.player.x + game.player.width / 2,
-                    y: game.player.y
-                });
+                if (game.powerUp.active) {
+                    // Double firepower - two bullets spread apart
+                    game.bullets.push({
+                        x: game.player.x + game.player.width / 2 - 12,
+                        y: game.player.y
+                    });
+                    game.bullets.push({
+                        x: game.player.x + game.player.width / 2 + 12,
+                        y: game.player.y
+                    });
+                } else {
+                    game.bullets.push({
+                        x: game.player.x + game.player.width / 2,
+                        y: game.player.y
+                    });
+                }
                 game.lastShot = now;
                 playSound('shoot');
             }
