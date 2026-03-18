@@ -1,0 +1,19 @@
+# Environment files - never commit these!
+.env
+*.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+
+# uv
+.python-version
+
+# Mac
+.DS_Store
+
+# Node (just in case)
+node_modules/
