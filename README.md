@@ -1,8 +1,22 @@
-# Invader
+# Invader 👾
 
 A Space Invaders clone built with FastAPI and JavaScript Canvas.
 
-## Quick Start
+🎮 **Play it live:** https://invader.onrender.com
+
+## Features
+- Classic Space Invaders gameplay
+- Special glowing aliens worth bonus points
+- Double fire power-up for 10 seconds
+- Sound effects
+- Progressive difficulty per level
+
+## Quick View
+
+- To play it... Invader is deployed on render at https://invader-rad9.onrender.com
+
+
+## Quick Start for running local. 
 
 ```bash
 # Install dependencies
