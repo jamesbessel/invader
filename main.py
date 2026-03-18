@@ -19,6 +19,10 @@ templates = Jinja2Templates(directory="templates")
 # Active WebSocket connections
 active_connections: list[WebSocket] = []
 
+@app.api_route("/health", methods=["GET", "HEAD"])
+async def health():
+    return {"status": "ok"}
+
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
